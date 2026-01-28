@@ -1,0 +1,359 @@
+{% extends "base.html" %}
+
+{% block extra_css %}
+<style>
+    .chart-container {
+        background: #f8f9fa;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        margin-bottom: 30px;
+    }
+    
+    .chart-container h3 {
+        color: #667eea;
+        margin-bottom: 20px;
+    }
+    
+    .date-selector {
+        background: #f8f9fa;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 30px;
+        display: flex;
+        gap: 20px;
+        align-items: end;
+    }
+    
+    .date-selector .form-group {
+        margin-bottom: 0;
+        flex: 1;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<h2 style="color: #333; margin-bottom: 30px;">📈 Financial Analytics</h2>
+
+<div class="date-selector">
+    <div class="form-group">
+        <label for="month">Month</label>
+        <select id="month" class="form-control">
+            <option value="1">January</option>
+            <option value="2">February</option>
+            <option value="3">March</option>
+            <option value="4">April</option>
+            <option value="5">May</option>
+            <option value="6">June</option>
+            <option value="7">July</option>
+            <option value="8">August</option>
+            <option value="9">September</option>
+            <option value="10">October</option>
+            <option value="11">November</option>
+            <option value="12">December</option>
+        </select>
+    </div>
+    
+    <div class="form-group">
+        <label for="year">Year</label>
+        <select id="year" class="form-control">
+            <!-- Years will be populated by JavaScript -->
+        </select>
+    </div>
+    
+    <button onclick="updateCharts()" class="btn-primary">Update Charts</button>
+</div>
+
+<div class="grid">
+    <div class="chart-container">
+        <h3>Expenses by Category</h3>
+        <canvas id="expenseByCategoryChart"></canvas>
+    </div>
+
+    <div class="chart-container">
+        <h3>Savings by Category</h3>
+        <canvas id="savingsByCategoryChart"></canvas>
+    </div>
+</div>
+
+<div class="chart-container">
+    <h3>Budget vs Actual Spend (Total)</h3>
+    <canvas id="budgetVsSpendChart"></canvas>
+</div>
+
+<div class="chart-container">
+    <h3>Category Spending Breakdown</h3>
+    <canvas id="categoryBreakdownChart"></canvas>
+</div>
+
+<div class="chart-container">
+    <h3>Expense & Budget Timeline (Last 6 Months)</h3>
+    <canvas id="timelineChart"></canvas>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+<script>
+    let charts = {};
+    
+    // Populate year dropdown
+    const yearSelect = document.getElementById('year');
+    const currentYear = new Date().getFullYear();
+    for (let year = currentYear; year >= currentYear - 10; year--) {
+        const option = document.createElement('option');
+        option.value = year;
+        option.textContent = year;
+        yearSelect.appendChild(option);
+    }
+    
+    // Set current month and year
+    const currentMonth = new Date().getMonth() + 1;
+    document.getElementById('month').value = currentMonth;
+    document.getElementById('year').value = currentYear;
+    
+    function updateCharts() {
+        const month = document.getElementById('month').value;
+        const year = document.getElementById('year').value;
+        
+        fetch(`/api/analytics_data?month=${month}&year=${year}`)
+            .then(response => response.json())
+            .then(data => {
+                // Destroy existing charts
+                Object.values(charts).forEach(chart => chart.destroy());
+                charts = {};
+                
+                // Expense by Category Chart
+                const expenseCtx = document.getElementById('expenseByCategoryChart').getContext('2d');
+                charts.expense = new Chart(expenseCtx, {
+                    type: 'pie',
+                    data: {
+                        labels: data.expense_by_category.map(item => item.name),
+                        datasets: [{
+                            data: data.expense_by_category.map(item => item.amount),
+                            backgroundColor: [
+                                '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0',
+                                '#9966FF', '#FF9F40', '#FF6384', '#C9CBCF'
+                            ]
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: { position: 'bottom' },
+                            datalabels: { display: false }
+                        }
+                    }
+                });
+
+                // Savings by Category Chart
+                const savingsCtx = document.getElementById('savingsByCategoryChart').getContext('2d');
+                charts.savings = new Chart(savingsCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: data.savings_by_category.map(item => item.name),
+                        datasets: [{
+                            data: data.savings_by_category.map(item => item.amount),
+                            backgroundColor: [
+                                '#4BC0C0', '#36A2EB', '#FFCE56',
+                                '#FF6384', '#9966FF', '#FF9F40'
+                            ]
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: { position: 'bottom' },
+                            datalabels: { display: false }
+                        }
+                    }
+                });
+
+                // Budget vs Spend Chart - Total only
+                const budgetCtx = document.getElementById('budgetVsSpendChart').getContext('2d');
+                const totalBudget = data.budget_vs_spend.reduce((sum, item) => sum + item.budget, 0);
+                const totalSpent = data.budget_vs_spend.reduce((sum, item) => sum + item.spent, 0);
+                
+                charts.budget = new Chart(budgetCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['This Month'],
+                        datasets: [
+                            {
+                                label: 'Budget',
+                                data: [totalBudget],
+                                backgroundColor: '#36A2EB'
+                            },
+                            {
+                                label: 'Actual Spend',
+                                data: [totalSpent],
+                                backgroundColor: totalSpent > totalBudget ? '#FF6384' : '#4BC0C0'
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: { position: 'top' },
+                            datalabels: {
+                                anchor: 'end',
+                                align: 'top',
+                                formatter: (value) => '$' + value.toFixed(2),
+                                font: { weight: 'bold', size: 14 }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: (value) => '$' + value.toFixed(0)
+                                }
+                            }
+                        }
+                    }
+                });
+
+                // Category Breakdown Chart
+                const categoryCtx = document.getElementById('categoryBreakdownChart').getContext('2d');
+                charts.categoryBreakdown = new Chart(categoryCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: data.category_details.map(item => item.name),
+                        datasets: [
+                            {
+                                label: 'Budget',
+                                data: data.category_details.map(item => item.budget),
+                                backgroundColor: '#4BC0C0'
+                            },
+                            {
+                                label: 'Spent',
+                                data: data.category_details.map(item => item.spent),
+                                backgroundColor: data.category_details.map(item => 
+                                    item.spent > item.budget ? '#FF6384' : '#FFCE56'
+                                )
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: { position: 'top' },
+                            datalabels: {
+                                anchor: 'end',
+                                align: 'top',
+                                formatter: (value) => '$' + value.toFixed(0),
+                                font: { weight: 'bold', size: 11 }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    afterLabel: function(context) {
+                                        if (context.dataset.label === 'Spent') {
+                                            const budget = data.category_details[context.dataIndex].budget;
+                                            const spent = data.category_details[context.dataIndex].spent;
+                                            const remaining = budget - spent;
+                                            const percentage = budget > 0 ? ((spent / budget) * 100).toFixed(1) : 0;
+                                            return [
+                                                `Remaining: $${remaining.toFixed(2)}`,
+                                                `Used: ${percentage}% of budget`
+                                            ];
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: (value) => '$' + value.toFixed(0)
+                                }
+                            }
+                        }
+                    }
+                });
+
+                // Timeline Chart
+                const timelineCtx = document.getElementById('timelineChart').getContext('2d');
+                const spendColors = data.monthly_timeline.map((item, index) => {
+                    return item.amount > data.budget_timeline[index] ? '#FF6384' : '#4BC0C0';
+                });
+                
+                charts.timeline = new Chart(timelineCtx, {
+                    type: 'line',
+                    data: {
+                        labels: data.monthly_timeline.map(item => item.month),
+                        datasets: [
+                            {
+                                label: 'Budget',
+                                data: data.budget_timeline,
+                                borderColor: '#36A2EB',
+                                backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                                tension: 0.4,
+                                fill: false,
+                                borderWidth: 3,
+                                pointRadius: 5,
+                                pointBackgroundColor: '#36A2EB'
+                            },
+                            {
+                                label: 'Actual Spend',
+                                data: data.monthly_timeline.map(item => item.amount),
+                                borderColor: '#4BC0C0',
+                                tension: 0.4,
+                                fill: false,
+                                borderWidth: 3,
+                                pointRadius: 6,
+                                pointBackgroundColor: spendColors,
+                                pointBorderColor: spendColors,
+                                pointBorderWidth: 2,
+                                segment: {
+                                    borderColor: ctx => {
+                                        const index = ctx.p0DataIndex;
+                                        if (index >= data.budget_timeline.length) return '#4BC0C0';
+                                        const budgetAmount = data.budget_timeline[index];
+                                        const spendAmount = data.monthly_timeline[index].amount;
+                                        return spendAmount > budgetAmount ? '#FF6384' : '#4BC0C0';
+                                    }
+                                }
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: { display: true, position: 'top' },
+                            datalabels: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    afterLabel: function(context) {
+                                        if (context.dataset.label === 'Actual Spend') {
+                                            const budget = data.budget_timeline[context.dataIndex];
+                                            const spent = context.parsed.y;
+                                            const diff = budget - spent;
+                                            if (spent > budget) {
+                                                return `Over budget by $${Math.abs(diff).toFixed(2)}`;
+                                            } else {
+                                                return `Under budget by $${diff.toFixed(2)}`;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: (value) => '$' + value.toFixed(0)
+                                }
+                            }
+                        }
+                    }
+                });
+            });
+    }
+    
+    // Load charts on page load
+    updateCharts();
+</script>
+{% endblock %}

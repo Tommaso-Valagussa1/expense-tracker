@@ -1,0 +1,534 @@
+{% extends "base.html" %}
+
+{% block extra_css %}
+<style>
+    .transaction-actions {
+        display: flex;
+        gap: 5px;
+    }
+    
+    .edit-btn, .delete-btn-small {
+        padding: 4px 8px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.8em;
+        transition: background 0.3s;
+    }
+    
+    .edit-btn {
+        background: #36A2EB;
+        color: white;
+    }
+    
+    .edit-btn:hover {
+        background: #2589d4;
+    }
+    
+    .delete-btn-small {
+        background: #dc3545;
+        color: white;
+    }
+    
+    .delete-btn-small:hover {
+        background: #c82333;
+    }
+    
+    .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0,0,0,0.5);
+    }
+    
+    .modal-content {
+        background-color: white;
+        margin: 5% auto;
+        padding: 30px;
+        border-radius: 10px;
+        width: 90%;
+        max-width: 500px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+    
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+    
+    .modal-header h3 {
+        color: #667eea;
+        margin: 0;
+    }
+    
+    .close {
+        color: #aaa;
+        font-size: 28px;
+        font-weight: bold;
+        cursor: pointer;
+        border: none;
+        background: none;
+    }
+    
+    .close:hover {
+        color: #000;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<h2 style="color: #333; margin-bottom: 20px;">Welcome, {{ current_user.username }}! 👋</h2>
+
+{% if show_budget_warning %}
+<div style="background: #fff3cd; padding: 20px; border-radius: 8px; margin-bottom: 30px; border-left: 4px solid #ffc107; display: flex; justify-content: space-between; align-items: center;">
+    <div>
+        <h3 style="color: #856404; margin-bottom: 10px;">⚠️ Missing Budgets for Current Month</h3>
+        <p style="color: #856404; margin-bottom: 10px;">The following categories don't have a budget set for this month:</p>
+        <ul style="color: #856404; margin-left: 20px;">
+            {% for cat in categories_without_budget %}
+            <li>{{ cat }}</li>
+            {% endfor %}
+        </ul>
+        <a href="{{ url_for('setup') }}" style="color: #667eea; text-decoration: underline;">Set budgets in Setup</a>
+    </div>
+    <form method="POST" action="{{ url_for('ignore_budget_notification') }}" style="margin: 0;">
+        <button type="submit" class="btn" style="background: #6c757d; white-space: nowrap;">Ignore Until Tomorrow</button>
+    </form>
+</div>
+{% endif %}
+
+{% if not expense_categories and not income_categories and not savings_categories %}
+<div style="background: #fff3cd; padding: 20px; border-radius: 8px; margin-bottom: 30px; border-left: 4px solid #ffc107;">
+    <h3 style="color: #856404; margin-bottom: 10px;">⚠️ Get Started</h3>
+    <p style="color: #856404; margin-bottom: 15px;">You haven't set up any categories yet! Head to the Setup page to create your expense, income, and savings categories.</p>
+    <a href="{{ url_for('setup') }}" class="btn-primary" style="text-decoration: none; display: inline-block;">Go to Setup</a>
+</div>
+{% endif %}
+
+<h3 style="color: #667eea; margin-bottom: 20px;">📝 Add Transactions</h3>
+
+<div class="grid">
+    <!-- Add Expense -->
+    <div class="card">
+        <h3>💸 Add Expense</h3>
+        {% if expense_categories %}
+        <form method="POST" action="{{ url_for('add_expense') }}">
+            <div class="form-group">
+                <label>Amount</label>
+                <input type="number" name="amount" step="0.01" required placeholder="0.00">
+            </div>
+            <div class="form-group">
+                <label>Category</label>
+                <select name="category_id" required>
+                    <option value="">Select Category</option>
+                    {% for cat in expense_categories %}
+                    <option value="{{ cat.id }}">{{ cat.name }}</option>
+                    {% for subcat in cat.subcategories %}
+                    <option value="{{ subcat.id }}">  └─ {{ subcat.name }}</option>
+                    {% endfor %}
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <input type="text" name="description" placeholder="Optional description">
+            </div>
+            <div class="form-group">
+                <label>Date</label>
+                <input type="date" name="date" value="{{ now().strftime('%Y-%m-%d') }}" required>
+            </div>
+            <button type="submit" class="btn-primary">Add Expense</button>
+        </form>
+        {% else %}
+        <p style="color: #999; text-align: center; padding: 20px;">No expense categories yet. <a href="{{ url_for('setup') }}" style="color: #667eea;">Add categories</a> first.</p>
+        {% endif %}
+    </div>
+
+    <!-- Add Income -->
+    <div class="card">
+        <h3>💰 Add Income</h3>
+        {% if income_categories %}
+        <form method="POST" action="{{ url_for('add_income') }}">
+            <div class="form-group">
+                <label>Amount</label>
+                <input type="number" name="amount" step="0.01" required placeholder="0.00">
+            </div>
+            <div class="form-group">
+                <label>Category</label>
+                <select name="category_id" required>
+                    <option value="">Select Category</option>
+                    {% for cat in income_categories %}
+                    <option value="{{ cat.id }}">{{ cat.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <input type="text" name="description" placeholder="Optional description">
+            </div>
+            <div class="form-group">
+                <label>Date</label>
+                <input type="date" name="date" value="{{ now().strftime('%Y-%m-%d') }}" required>
+            </div>
+            <button type="submit" class="btn-primary">Add Income</button>
+        </form>
+        {% else %}
+        <p style="color: #999; text-align: center; padding: 20px;">No income categories yet. <a href="{{ url_for('setup') }}" style="color: #667eea;">Add categories</a> first.</p>
+        {% endif %}
+    </div>
+
+    <!-- Add Savings -->
+    <div class="card">
+        <h3>🏦 Add Savings</h3>
+        {% if savings_categories %}
+        <form method="POST" action="{{ url_for('add_savings') }}">
+            <div class="form-group">
+                <label>Amount</label>
+                <input type="number" name="amount" step="0.01" required placeholder="0.00">
+            </div>
+            <div class="form-group">
+                <label>Category</label>
+                <select name="category_id" required>
+                    <option value="">Select Category</option>
+                    {% for cat in savings_categories %}
+                    <option value="{{ cat.id }}">{{ cat.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <input type="text" name="description" placeholder="Optional description">
+            </div>
+            <div class="form-group">
+                <label>Date</label>
+                <input type="date" name="date" value="{{ now().strftime('%Y-%m-%d') }}" required>
+            </div>
+            <button type="submit" class="btn-primary">Add Savings</button>
+        </form>
+        {% else %}
+        <p style="color: #999; text-align: center; padding: 20px;">No savings categories yet. <a href="{{ url_for('setup') }}" style="color: #667eea;">Add categories</a> first.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Monthly Summary -->
+<div style="margin-top: 40px; background: #f8f9fa; padding: 20px; border-radius: 8px;">
+    <h3 style="color: #667eea; margin-bottom: 20px;">📊 Current Month Summary</h3>
+    
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px;">
+        <div style="background: white; padding: 20px; border-radius: 8px; text-align: center;">
+            <div style="font-size: 0.9em; color: #666; margin-bottom: 5px;">Total Budget</div>
+            <div style="font-size: 1.8em; color: #9966FF; font-weight: bold;">
+                ${{ "%.2f"|format(total_budget) }}
+            </div>
+        </div>
+        
+        <div style="background: white; padding: 20px; border-radius: 8px; text-align: center;">
+            <div style="font-size: 0.9em; color: #666; margin-bottom: 5px;">Total Expenses</div>
+            <div style="font-size: 1.8em; color: #FF6384; font-weight: bold;">
+                ${% set total_expenses = expenses|sum(attribute='amount') %}{{ "%.2f"|format(total_expenses) }}
+            </div>
+        </div>
+        
+        <div style="background: white; padding: 20px; border-radius: 8px; text-align: center;">
+            <div style="font-size: 0.9em; color: #666; margin-bottom: 5px;">Total Income</div>
+            <div style="font-size: 1.8em; color: #4BC0C0; font-weight: bold;">
+                ${% set total_income = incomes|sum(attribute='amount') %}{{ "%.2f"|format(total_income) }}
+            </div>
+        </div>
+        
+        <div style="background: white; padding: 20px; border-radius: 8px; text-align: center;">
+            <div style="font-size: 0.9em; color: #666; margin-bottom: 5px;">Total Savings</div>
+            <div style="font-size: 1.8em; color: #36A2EB; font-weight: bold;">
+                ${% set total_savings = savings|sum(attribute='amount') %}{{ "%.2f"|format(total_savings) }}
+            </div>
+        </div>
+        
+        <div style="background: white; padding: 20px; border-radius: 8px; text-align: center;">
+            <div style="font-size: 0.9em; color: #666; margin-bottom: 5px;">Budget Remaining</div>
+            <div style="font-size: 1.8em; font-weight: bold; color: {% if total_budget - total_expenses >= 0 %}#4BC0C0{% else %}#FF6384{% endif %};">
+                ${{ "%.2f"|format(total_budget - total_expenses) }}
+            </div>
+        </div>
+        
+        <div style="background: white; padding: 20px; border-radius: 8px; text-align: center;">
+            <div style="font-size: 0.9em; color: #666; margin-bottom: 5px;">Net (Income - Expenses - Savings)</div>
+            <div style="font-size: 1.8em; font-weight: bold; color: {% if total_income - total_expenses - total_savings >= 0 %}#4BC0C0{% else %}#FF6384{% endif %};">
+                ${{ "%.2f"|format(total_income - total_expenses - total_savings) }}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Transactions -->
+<div style="margin-top: 40px;">
+    <h3 style="color: #667eea; margin-bottom: 20px;">📋 Recent Transactions</h3>
+    
+    <h4 style="margin-top: 20px; color: #333;">Expenses</h4>
+    {% if expenses %}
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Category</th>
+                <th>Description</th>
+                <th>Amount</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for expense in expenses|sort(attribute='date', reverse=True) %}
+            <tr>
+                <td>{{ expense.date.strftime('%Y-%m-%d') }}</td>
+                <td>
+                    {% if expense.category.parent %}
+                    {{ expense.category.parent.name }} > {{ expense.category.name }}
+                    {% else %}
+                    {{ expense.category.name }}
+                    {% endif %}
+                </td>
+                <td>{{ expense.description or '-' }}</td>
+                <td style="color: #FF6384; font-weight: bold;">${{ "%.2f"|format(expense.amount) }}</td>
+                <td>
+                    <div class="transaction-actions">
+                        <button class="edit-btn" onclick="openEditExpenseModal({{ expense.id }}, {{ expense.amount }}, {{ expense.category_id }}, '{{ expense.description }}', '{{ expense.date.strftime('%Y-%m-%d') }}')">Edit</button>
+                        <form method="POST" action="{{ url_for('delete_expense', expense_id=expense.id) }}" style="margin: 0;" onsubmit="return confirm('Are you sure you want to delete this expense?');">
+                            <button type="submit" class="delete-btn-small">Delete</button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color: #999; text-align: center; padding: 20px; background: #f8f9fa; border-radius: 8px;">No expenses this month</p>
+    {% endif %}
+
+    <h4 style="margin-top: 30px; color: #333;">Income</h4>
+    {% if incomes %}
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Category</th>
+                <th>Description</th>
+                <th>Amount</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for income in incomes|sort(attribute='date', reverse=True) %}
+            <tr>
+                <td>{{ income.date.strftime('%Y-%m-%d') }}</td>
+                <td>{{ income.category.name }}</td>
+                <td>{{ income.description or '-' }}</td>
+                <td style="color: #4BC0C0; font-weight: bold;">${{ "%.2f"|format(income.amount) }}</td>
+                <td>
+                    <div class="transaction-actions">
+                        <button class="edit-btn" onclick="openEditIncomeModal({{ income.id }}, {{ income.amount }}, {{ income.category_id }}, '{{ income.description }}', '{{ income.date.strftime('%Y-%m-%d') }}')">Edit</button>
+                        <form method="POST" action="{{ url_for('delete_income', income_id=income.id) }}" style="margin: 0;" onsubmit="return confirm('Are you sure you want to delete this income?');">
+                            <button type="submit" class="delete-btn-small">Delete</button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color: #999; text-align: center; padding: 20px; background: #f8f9fa; border-radius: 8px;">No income this month</p>
+    {% endif %}
+
+    <h4 style="margin-top: 30px; color: #333;">Savings</h4>
+    {% if savings %}
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Category</th>
+                <th>Description</th>
+                <th>Amount</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for saving in savings|sort(attribute='date', reverse=True) %}
+            <tr>
+                <td>{{ saving.date.strftime('%Y-%m-%d') }}</td>
+                <td>{{ saving.category.name }}</td>
+                <td>{{ saving.description or '-' }}</td>
+                <td style="color: #36A2EB; font-weight: bold;">${{ "%.2f"|format(saving.amount) }}</td>
+                <td>
+                    <div class="transaction-actions">
+                        <button class="edit-btn" onclick="openEditSavingsModal({{ saving.id }}, {{ saving.amount }}, {{ saving.category_id }}, '{{ saving.description }}', '{{ saving.date.strftime('%Y-%m-%d') }}')">Edit</button>
+                        <form method="POST" action="{{ url_for('delete_savings', savings_id=saving.id) }}" style="margin: 0;" onsubmit="return confirm('Are you sure you want to delete this savings entry?');">
+                            <button type="submit" class="delete-btn-small">Delete</button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color: #999; text-align: center; padding: 20px; background: #f8f9fa; border-radius: 8px;">No savings this month</p>
+    {% endif %}
+</div>
+
+<!-- Edit Expense Modal -->
+<div id="editExpenseModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Edit Expense</h3>
+            <button class="close" onclick="closeEditExpenseModal()">&times;</button>
+        </div>
+        <form id="editExpenseForm" method="POST">
+            <div class="form-group">
+                <label>Amount</label>
+                <input type="number" name="amount" id="editExpenseAmount" step="0.01" required>
+            </div>
+            <div class="form-group">
+                <label>Category</label>
+                <select name="category_id" id="editExpenseCategory" required>
+                    {% for cat in expense_categories %}
+                    <option value="{{ cat.id }}">{{ cat.name }}</option>
+                    {% for subcat in cat.subcategories %}
+                    <option value="{{ subcat.id }}">  └─ {{ subcat.name }}</option>
+                    {% endfor %}
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <input type="text" name="description" id="editExpenseDescription">
+            </div>
+            <div class="form-group">
+                <label>Date</label>
+                <input type="date" name="date" id="editExpenseDate" required>
+            </div>
+            <button type="submit" class="btn-primary">Update Expense</button>
+        </form>
+    </div>
+</div>
+
+<!-- Edit Income Modal -->
+<div id="editIncomeModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Edit Income</h3>
+            <button class="close" onclick="closeEditIncomeModal()">&times;</button>
+        </div>
+        <form id="editIncomeForm" method="POST">
+            <div class="form-group">
+                <label>Amount</label>
+                <input type="number" name="amount" id="editIncomeAmount" step="0.01" required>
+            </div>
+            <div class="form-group">
+                <label>Category</label>
+                <select name="category_id" id="editIncomeCategory" required>
+                    {% for cat in income_categories %}
+                    <option value="{{ cat.id }}">{{ cat.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <input type="text" name="description" id="editIncomeDescription">
+            </div>
+            <div class="form-group">
+                <label>Date</label>
+                <input type="date" name="date" id="editIncomeDate" required>
+            </div>
+            <button type="submit" class="btn-primary">Update Income</button>
+        </form>
+    </div>
+</div>
+
+<!-- Edit Savings Modal -->
+<div id="editSavingsModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Edit Savings</h3>
+            <button class="close" onclick="closeEditSavingsModal()">&times;</button>
+        </div>
+        <form id="editSavingsForm" method="POST">
+            <div class="form-group">
+                <label>Amount</label>
+                <input type="number" name="amount" id="editSavingsAmount" step="0.01" required>
+            </div>
+            <div class="form-group">
+                <label>Category</label>
+                <select name="category_id" id="editSavingsCategory" required>
+                    {% for cat in savings_categories %}
+                    <option value="{{ cat.id }}">{{ cat.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <input type="text" name="description" id="editSavingsDescription">
+            </div>
+            <div class="form-group">
+                <label>Date</label>
+                <input type="date" name="date" id="editSavingsDate" required>
+            </div>
+            <button type="submit" class="btn-primary">Update Savings</button>
+        </form>
+    </div>
+</div>
+
+<script>
+function openEditExpenseModal(id, amount, categoryId, description, date) {
+    document.getElementById('editExpenseForm').action = `/edit_expense/${id}`;
+    document.getElementById('editExpenseAmount').value = amount;
+    document.getElementById('editExpenseCategory').value = categoryId;
+    document.getElementById('editExpenseDescription').value = description || '';
+    document.getElementById('editExpenseDate').value = date;
+    document.getElementById('editExpenseModal').style.display = 'block';
+}
+
+function closeEditExpenseModal() {
+    document.getElementById('editExpenseModal').style.display = 'none';
+}
+
+function openEditIncomeModal(id, amount, categoryId, description, date) {
+    document.getElementById('editIncomeForm').action = `/edit_income/${id}`;
+    document.getElementById('editIncomeAmount').value = amount;
+    document.getElementById('editIncomeCategory').value = categoryId;
+    document.getElementById('editIncomeDescription').value = description || '';
+    document.getElementById('editIncomeDate').value = date;
+    document.getElementById('editIncomeModal').style.display = 'block';
+}
+
+function closeEditIncomeModal() {
+    document.getElementById('editIncomeModal').style.display = 'none';
+}
+
+function openEditSavingsModal(id, amount, categoryId, description, date) {
+    document.getElementById('editSavingsForm').action = `/edit_savings/${id}`;
+    document.getElementById('editSavingsAmount').value = amount;
+    document.getElementById('editSavingsCategory').value = categoryId;
+    document.getElementById('editSavingsDescription').value = description || '';
+    document.getElementById('editSavingsDate').value = date;
+    document.getElementById('editSavingsModal').style.display = 'block';
+}
+
+function closeEditSavingsModal() {
+    document.getElementById('editSavingsModal').style.display = 'none';
+}
+
+// Close modal when clicking outside
+window.onclick = function(event) {
+    if (event.target.classList.contains('modal')) {
+        event.target.style.display = 'none';
+    }
+}
+</script>
+{% endblock %}

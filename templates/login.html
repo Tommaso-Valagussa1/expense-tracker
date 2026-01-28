@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="max-width: 400px; margin: 50px auto;">
+    <h2 style="text-align: center; color: #667eea; margin-bottom: 30px;">Login to Expense Tracker</h2>
+    
+    <form method="POST">
+        <div class="form-group">
+            <label for="username">Username</label>
+            <input type="text" id="username" name="username" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" required>
+            <div style="text-align: right; margin-top: 5px;">
+                <a href="{{ url_for('forgot_password') }}" style="color: #667eea; font-size: 0.9em; text-decoration: none;">Forgot password?</a>
+            </div>
+        </div>
+        
+        <button type="submit" class="btn-primary" style="width: 100%;">Login</button>
+    </form>
+    
+    <p style="text-align: center; margin-top: 20px;">
+        Don't have an account? <a href="{{ url_for('register') }}" style="color: #667eea;">Register here</a>
+    </p>
+</div>
+{% endblock %}
