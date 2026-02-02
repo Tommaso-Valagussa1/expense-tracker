@@ -14,7 +14,7 @@ load_dotenv()
 app = Flask(__name__)
 
 # Environment-based configuration
-if os.environ.get("PYTHONANYWHERE_SITE"):
+if os.environ.get("PYTHONANYWHERE_SITE") == 'true':
     # Production on PythonAnywhere
     app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL")
     app.config['SECRET_KEY'] = os.getenv("SECRET_KEY")
